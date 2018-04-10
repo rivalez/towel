@@ -16,6 +16,10 @@ final class Package implements Comparable<Package> {
         return id;
     }
 
+    public Client getClient() {
+        return client;
+    }
+
     @Override
     public String toString() {
         return "Package{" +
