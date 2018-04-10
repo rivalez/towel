@@ -1,30 +1,32 @@
 package priority.queue;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
+final class Deliver {
+    private final Package pack;
+    private final Office office;
+    private final Client client;
+    private State state = State.NEW;
 
-class Deliver extends FutureTask<Deliver> {
-    private Office office;
-
-    public Deliver(Callable<Deliver> callable) {
-        super(callable);
+    Deliver(Package pack, Office office, Client client) {
+        this.pack = pack;
+        this.office = office;
+        this.client = client;
     }
 
-    public Deliver(Runnable runnable, Deliver result) {
-        super(runnable, result);
+    Package getPack() {
+        return pack;
+    }
+
+    void setState(State state) {
+        this.state = state;
     }
 
     @Override
-    protected void done() {
-        try {
-            office.inform(this.get());
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        }
-        //notify about ready
-
+    public String toString() {
+        return "Deliver{" +
+                "pack=" + pack +
+                ", office=" + office +
+                ", client=" + client +
+                ", state=" + state +
+                '}';
     }
 }

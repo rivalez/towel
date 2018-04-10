@@ -1,0 +1,5 @@
+1. Dostarczanie paczek do różnych klientów.
+2. Maksymalna ilosc wątkow odpowiadajacych za dostarczenie jest równa ilości kurierów.
+3. W momencie dostarczenia paczki biuro dostanie notyfikacje.
+4. Metoda sendPackage wprowadza paczke do systemu. Następnie zlecenie należy przetworzyć i wysłać do odpowiedniego klienta.
+5. Gdy nie można dostarczyć paczki do klienta. Należy to zgłosić do biura i przerwać dostarczenie.

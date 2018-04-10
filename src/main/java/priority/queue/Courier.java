@@ -1,10 +1,10 @@
 package priority.queue;
 
-public class Courier {
+final class Courier implements Runnable {
     private Package pack;
-    private Deliver deliver;
+    private DeliverTask deliver;
 
-    public Courier(Package pack, Deliver deliver) {
+    public Courier(Package pack, DeliverTask deliver) {
         this.pack = pack;
         this.deliver = deliver;
     }
@@ -13,7 +13,21 @@ public class Courier {
         return pack;
     }
 
-    public Deliver getDeliver() {
+    public DeliverTask getDeliver() {
         return deliver;
+    }
+
+    //using setters to change package after delivery
+    public void setPack(Package pack) {
+        this.pack = pack;
+    }
+
+    public void setDeliver(DeliverTask deliver) {
+        this.deliver = deliver;
+    }
+
+    @Override
+    public void run() {
+
     }
 }

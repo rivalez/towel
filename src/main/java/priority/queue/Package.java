@@ -1,20 +1,32 @@
 package priority.queue;
 
-public class Package {
-    private int id;
-    private String toWhom;
-    private byte[] content = {0,0,0,1};
+import java.util.Arrays;
 
-    public Package(int id, String toWhom) {
+final class Package implements Comparable<Package> {
+    private final int id;
+    private final Client client;
+    private final byte[] content = {0,0,0,1};
+
+    Package(int id, Client client) {
         this.id = id;
-        this.toWhom = toWhom;
+        this.client = client;
     }
 
     public int getId() {
         return id;
     }
 
-    public String getToWhom() {
-        return toWhom;
+    @Override
+    public String toString() {
+        return "Package{" +
+                "id=" + id +
+                ", client=" + client +
+                ", content=" + Arrays.toString(content) +
+                '}';
+    }
+
+    @Override
+    public int compareTo(Package o) {
+        return 1;
     }
 }
