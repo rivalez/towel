@@ -1,14 +1,19 @@
 package com.tabor.prir2;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.Comparator;
+import java.util.concurrent.*;
+import java.util.logging.Logger;
 
 public class ConversionManagement implements ConversionManagementInterface {
     private ConverterInterface converter;
     private ConversionReceiverInterface receiver;
+    private DataPortionReceiver dataPortionReceiver;
 
     private Computation computation;
+
+    ConversionManagement() {
+        this.dataPortionReceiver = new DataPortionReceiver();
+    }
 
     @Override
     public void setCores(int cores) {
@@ -30,10 +35,35 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     @Override
     public void addDataPortion(ConverterInterface.DataPortionInterface data) {
+        dataPortionReceiver.addDataPortion(data);
+    }
 
+    class DataPortionReceiver {
+        //todo not sure this structure will work
+        private final PriorityBlockingQueue<ConverterInterface.DataPortionInterface> portions = new PriorityBlockingQueue<>(20, new DataPortionComparator());
+
+        class DataPortionComparator implements Comparator<ConverterInterface.DataPortionInterface> {
+            @Override
+            public int compare(ConverterInterface.DataPortionInterface o1, ConverterInterface.DataPortionInterface o2) {
+                return Integer.compare(o1.id(), o2.id());
+            }
+        }
+
+        void addDataPortion(ConverterInterface.DataPortionInterface data){
+            portions.put(data);
+        }
+
+        PriorityBlockingQueue<ConverterInterface.DataPortionInterface> getPortions() {
+            return portions;
+        }
+    }
+
+    public DataPortionReceiver getDataPortionReceiver() {
+        return dataPortionReceiver;
     }
 
     class Computation {
+        private final Logger logger = Logger.getLogger(Computation.class.getName());
         private ExecutorService workers;
         private ConverterInterface converter;
 
@@ -45,9 +75,9 @@ public class ConversionManagement implements ConversionManagementInterface {
         void handleWorkersChange() {
             try {
                 workers.awaitTermination(100, TimeUnit.MILLISECONDS);
-                workers.shutdown();
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                logger.warning(e.getMessage());
+                workers.shutdown();
             }
         }
 
