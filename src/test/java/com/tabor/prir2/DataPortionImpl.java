@@ -5,7 +5,7 @@ public class DataPortionImpl implements ConverterInterface.DataPortionInterface 
     private int[] data;
     private ConverterInterface.Channel channel;
 
-    public DataPortionImpl(int id, int[] data, ConverterInterface.Channel channel) {
+    DataPortionImpl(int id, int[] data, ConverterInterface.Channel channel) {
         this.id = id;
         this.data = data;
         this.channel = channel;

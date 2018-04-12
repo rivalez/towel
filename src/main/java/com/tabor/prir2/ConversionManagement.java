@@ -1,7 +1,10 @@
 package com.tabor.prir2;
 
 import java.util.Comparator;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 public class ConversionManagement implements ConversionManagementInterface {
@@ -17,7 +20,7 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     @Override
     public void setCores(int cores) {
-        if(computation != null) {
+        if (computation != null) {
             computation.handleWorkersChange();
         }
         computation = new Computation(cores, converter);
@@ -39,23 +42,27 @@ public class ConversionManagement implements ConversionManagementInterface {
     }
 
     class DataPortionReceiver {
-        //todo not sure this structure will work
-        private final PriorityBlockingQueue<ConverterInterface.DataPortionInterface> portions = new PriorityBlockingQueue<>(20, new DataPortionComparator());
+        private final PriorityBlockingQueue<ConverterInterface.DataPortionInterface> portions =
+                new PriorityBlockingQueue<>(20,
+                        getDataPortionInterfaceComparator());
 
-        class DataPortionComparator implements Comparator<ConverterInterface.DataPortionInterface> {
-            @Override
-            public int compare(ConverterInterface.DataPortionInterface o1, ConverterInterface.DataPortionInterface o2) {
-                return Integer.compare(o1.id(), o2.id());
-            }
+        private Comparator<ConverterInterface.DataPortionInterface> getDataPortionInterfaceComparator() {
+            return Comparator.comparing(ConverterInterface.DataPortionInterface::id)
+                    .thenComparing(ConverterInterface.DataPortionInterface::channel);
         }
 
-        void addDataPortion(ConverterInterface.DataPortionInterface data){
+        void addDataPortion(ConverterInterface.DataPortionInterface data) {
             portions.put(data);
         }
 
         PriorityBlockingQueue<ConverterInterface.DataPortionInterface> getPortions() {
             return portions;
         }
+
+        ConverterInterface.DataPortionInterface take() throws InterruptedException {
+            return portions.take();
+        }
+
     }
 
     public DataPortionReceiver getDataPortionReceiver() {
