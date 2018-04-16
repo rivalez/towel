@@ -1,22 +1,24 @@
 package com.tabor.prir2;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
 
 public class ConversionManagement implements ConversionManagementInterface {
     private ConversionReceiverInterface receiver;
-    private DataPortionReceiver dataPortionReceiver;
     private ConverterInterface converter;
 
     private Computation computation;
-
     //todo consider usage of more threads?
     private ExecutorService computationService = Executors.newSingleThreadExecutor();
 
     private PairMatcher pairMatcher = new PairMatcher();
+    //todo consider usage of more threads?
     private ExecutorService pairMatcherService = Executors.newSingleThreadExecutor();
+
+    private DataPortionReceiver dataPortionReceiver;
 
     ConversionManagement() {
         this.dataPortionReceiver = new DataPortionReceiver();
@@ -28,6 +30,9 @@ public class ConversionManagement implements ConversionManagementInterface {
             computation.handleWorkersChange();
         }
         computation = new Computation(cores);
+        if (computation.converter == null) {
+            computation.setConverter(converter);
+        }
     }
 
     @Override
@@ -61,10 +66,6 @@ public class ConversionManagement implements ConversionManagementInterface {
             portions.put(data);
         }
 
-        PriorityBlockingQueue<ConverterInterface.DataPortionInterface> getPortions() {
-            return portions;
-        }
-
         ConverterInterface.DataPortionInterface take() {
             try {
                 return portions.take();
@@ -75,10 +76,6 @@ public class ConversionManagement implements ConversionManagementInterface {
             return null;
         }
 
-    }
-
-    DataPortionReceiver getDataPortionReceiver() {
-        return dataPortionReceiver;
     }
 
     class Computation {
@@ -107,7 +104,7 @@ public class ConversionManagement implements ConversionManagementInterface {
             Future<Long> result = workers.submit(() -> converter.convert(data));
             try {
                 long comResult = result.get();
-                pairMatcherService.execute(() -> pairMatcher.add(new ComputeResult(data, comResult)));
+                pairMatcherService.execute(() -> pairMatcher.tryFindPair(new ComputeResult(data, comResult)));
                 return comResult;
             } catch (InterruptedException | ExecutionException e) {
                 logger.warning(e.getMessage());
@@ -117,10 +114,13 @@ public class ConversionManagement implements ConversionManagementInterface {
         }
     }
 
+    /**
+     * matching of elements can use multi threads but sending should be single threading
+     */
     class PairMatcher {
         private ConcurrentSkipListSet<ComputeResult> computedElements = new ConcurrentSkipListSet<>(Comparator.comparing(data -> data.getData().id()));
 
-        void add(ComputeResult result) {
+        void tryFindPair(ComputeResult result) {
             findPair(result);
             computedElements.add(result);
         }
@@ -149,10 +149,6 @@ public class ConversionManagement implements ConversionManagementInterface {
 
         ConverterInterface.DataPortionInterface getData() {
             return data;
-        }
-
-        public long getResult() {
-            return result;
         }
 
         int id() {

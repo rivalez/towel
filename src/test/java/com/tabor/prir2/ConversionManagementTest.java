@@ -1,17 +1,21 @@
 package com.tabor.prir2;
 
-import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.testng.annotations.Test;
 
 import java.util.Arrays;
 import java.util.List;
 
+import static com.jayway.awaitility.Awaitility.await;
+import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Matchers.any;
+import static org.testng.Assert.assertEquals;
 
-class ConversionManagementTest {
-    @Test
-    public void simulation1() throws InterruptedException {
+public class ConversionManagementTest {
+
+    @Test(invocationCount = 1000)
+    public void simulation1Test() {
         //given
         List<ConverterInterface.DataPortionInterface> portions = Arrays.asList(
                 new DataPortionImpl(2, new int[]{0, 0, 0}, ConverterInterface.Channel.RIGHT_CHANNEL),
@@ -34,8 +38,11 @@ class ConversionManagementTest {
         conversionManagement.setConversionReceiver(receiver);
         portions.forEach(conversionManagement::addDataPortion);
 
-        Thread.sleep(1000L);
 
-        System.out.println(receiver.results);
+        await().until(() -> receiver.results.size(), equalTo(3));
+        assertEquals(receiver.results.get(0).leftChannelData.id(), 1);
+        assertEquals(receiver.results.get(0).rightChannelData.id(), 1);
+        assertEquals(receiver.results.get(2).rightChannelData.id(), 3);
+        assertEquals(receiver.results.get(2).leftChannelData.id(), 3);
     }
 }
