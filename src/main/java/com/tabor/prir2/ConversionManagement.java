@@ -2,8 +2,8 @@ package com.tabor.prir2;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Predicate;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
 
 public class ConversionManagement implements ConversionManagementInterface {
     private ConversionReceiverInterface receiver;
@@ -126,11 +126,15 @@ public class ConversionManagement implements ConversionManagementInterface {
         }
 
         void findPair(ComputeResult newResult) {
-            Optional<ComputeResult> found = computedElements.stream().filter(computeResult -> newResult.getData().id() == computeResult.getData().id()).findFirst();
+            Optional<ComputeResult> found = computedElements.stream().filter(foundPair(newResult)).findFirst();
             if (found.isPresent()) {
                 ComputeResult foundValue = found.get();
                 receiver.result(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
             }
+        }
+
+        private Predicate<ComputeResult> foundPair(ComputeResult newResult) {
+            return computeResult -> newResult.id() == computeResult.id();
         }
     }
 
@@ -138,17 +142,21 @@ public class ConversionManagement implements ConversionManagementInterface {
         private ConverterInterface.DataPortionInterface data;
         private long result;
 
-        public ComputeResult(ConverterInterface.DataPortionInterface data, long result) {
+        ComputeResult(ConverterInterface.DataPortionInterface data, long result) {
             this.data = data;
             this.result = result;
         }
 
-        public ConverterInterface.DataPortionInterface getData() {
+        ConverterInterface.DataPortionInterface getData() {
             return data;
         }
 
         public long getResult() {
             return result;
+        }
+
+        int id() {
+            return data.id();
         }
     }
 }
