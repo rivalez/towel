@@ -1,18 +1,22 @@
 package com.tabor.prir2;
 
-import java.util.Comparator;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.PriorityBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class ConversionManagement implements ConversionManagementInterface {
-    private ConverterInterface converter;
     private ConversionReceiverInterface receiver;
     private DataPortionReceiver dataPortionReceiver;
+    private ConverterInterface converter;
 
     private Computation computation;
+
+    //todo consider usage of more threads?
+    private ExecutorService computationService = Executors.newSingleThreadExecutor();
+
+    private PairMatcher pairMatcher = new PairMatcher();
+    private ExecutorService pairMatcherService = Executors.newSingleThreadExecutor();
 
     ConversionManagement() {
         this.dataPortionReceiver = new DataPortionReceiver();
@@ -23,12 +27,13 @@ public class ConversionManagement implements ConversionManagementInterface {
         if (computation != null) {
             computation.handleWorkersChange();
         }
-        computation = new Computation(cores, converter);
+        computation = new Computation(cores);
     }
 
     @Override
     public void setConverter(ConverterInterface converter) {
         this.converter = converter;
+        computation.setConverter(converter);
     }
 
     @Override
@@ -39,6 +44,7 @@ public class ConversionManagement implements ConversionManagementInterface {
     @Override
     public void addDataPortion(ConverterInterface.DataPortionInterface data) {
         dataPortionReceiver.addDataPortion(data);
+        computationService.execute(() -> computation.compute(dataPortionReceiver.take()));
     }
 
     class DataPortionReceiver {
@@ -59,13 +65,19 @@ public class ConversionManagement implements ConversionManagementInterface {
             return portions;
         }
 
-        ConverterInterface.DataPortionInterface take() throws InterruptedException {
-            return portions.take();
+        ConverterInterface.DataPortionInterface take() {
+            try {
+                return portions.take();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            //todo think about it
+            return null;
         }
 
     }
 
-    public DataPortionReceiver getDataPortionReceiver() {
+    DataPortionReceiver getDataPortionReceiver() {
         return dataPortionReceiver;
     }
 
@@ -74,8 +86,11 @@ public class ConversionManagement implements ConversionManagementInterface {
         private ExecutorService workers;
         private ConverterInterface converter;
 
-        Computation(int cores, ConverterInterface converter) {
+        Computation(int cores) {
             this.workers = Executors.newFixedThreadPool(cores);
+        }
+
+        void setConverter(ConverterInterface converter) {
             this.converter = converter;
         }
 
@@ -88,8 +103,52 @@ public class ConversionManagement implements ConversionManagementInterface {
             }
         }
 
-        public long compute(ConverterInterface.DataPortionInterface data) {
-            return converter.convert(data);
+        long compute(ConverterInterface.DataPortionInterface data) {
+            Future<Long> result = workers.submit(() -> converter.convert(data));
+            try {
+                long comResult = result.get();
+                pairMatcherService.execute(() -> pairMatcher.add(new ComputeResult(data, comResult)));
+                return comResult;
+            } catch (InterruptedException | ExecutionException e) {
+                logger.warning(e.getMessage());
+            }
+            //todo think about it
+            return 0;
+        }
+    }
+
+    class PairMatcher {
+        private ConcurrentSkipListSet<ComputeResult> computedElements = new ConcurrentSkipListSet<>(Comparator.comparing(data -> data.getData().id()));
+
+        void add(ComputeResult result) {
+            findPair(result);
+            computedElements.add(result);
+        }
+
+        void findPair(ComputeResult newResult) {
+            Optional<ComputeResult> found = computedElements.stream().filter(computeResult -> newResult.getData().id() == computeResult.getData().id()).findFirst();
+            if (found.isPresent()) {
+                ComputeResult foundValue = found.get();
+                receiver.result(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
+            }
+        }
+    }
+
+    class ComputeResult {
+        private ConverterInterface.DataPortionInterface data;
+        private long result;
+
+        public ComputeResult(ConverterInterface.DataPortionInterface data, long result) {
+            this.data = data;
+            this.result = result;
+        }
+
+        public ConverterInterface.DataPortionInterface getData() {
+            return data;
+        }
+
+        public long getResult() {
+            return result;
         }
     }
 }

@@ -1,38 +1,41 @@
 package com.tabor.prir2;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.function.IntConsumer;
-import java.util.stream.IntStream;
+import java.util.Arrays;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Matchers.any;
 
 class ConversionManagementTest {
-
     @Test
-    public void priorityqueueTest() throws InterruptedException {
+    public void simulation1() throws InterruptedException {
+        //given
+        List<ConverterInterface.DataPortionInterface> portions = Arrays.asList(
+                new DataPortionImpl(2, new int[]{0, 0, 0}, ConverterInterface.Channel.RIGHT_CHANNEL),
+                new DataPortionImpl(3, new int[]{0, 0, 0}, ConverterInterface.Channel.LEFT_CHANNEL),
+                new DataPortionImpl(4, new int[]{0, 0, 0}, ConverterInterface.Channel.RIGHT_CHANNEL),
+                new DataPortionImpl(5, new int[]{0, 0, 0}, ConverterInterface.Channel.LEFT_CHANNEL),
+                new DataPortionImpl(10, new int[]{0, 0, 0}, ConverterInterface.Channel.RIGHT_CHANNEL),
+                new DataPortionImpl(2, new int[]{0, 0, 0}, ConverterInterface.Channel.LEFT_CHANNEL),
+                new DataPortionImpl(1, new int[]{0, 0, 0}, ConverterInterface.Channel.RIGHT_CHANNEL),
+                new DataPortionImpl(3, new int[]{0, 0, 0}, ConverterInterface.Channel.RIGHT_CHANNEL),
+                new DataPortionImpl(1, new int[]{0, 0, 0}, ConverterInterface.Channel.LEFT_CHANNEL),
+                new DataPortionImpl(11, new int[]{0, 0, 0}, ConverterInterface.Channel.RIGHT_CHANNEL)
+        );
         ConversionManagement conversionManagement = new ConversionManagement();
-        ExecutorService adders = Executors.newFixedThreadPool(4);
-        adders.execute(() -> IntStream.range(0, 50).forEach(populate(conversionManagement)));
-        adders.execute(() -> IntStream.range(0, 100).forEach(populate(conversionManagement)));
-        adders.execute(() -> IntStream.range(1, 151).forEach(populate(conversionManagement)));
-        adders.execute(() -> IntStream.range(1, 201).forEach(populate(conversionManagement)));
-        Thread.sleep(100L);
-        int size = conversionManagement.getDataPortionReceiver().getPortions().size();
-        int first = conversionManagement.getDataPortionReceiver().getPortions().take().id();
-        int second = conversionManagement.getDataPortionReceiver().getPortions().take().id();
-        int third = conversionManagement.getDataPortionReceiver().getPortions().take().id();
-        assertEquals(500, size);
-        assertEquals(0, first);
-        assertEquals(0, second);
-        assertEquals(1, third);
+        ConversionReceiverImpl receiver = new ConversionReceiverImpl();
+        ConverterInterface converter = Mockito.mock(ConverterInterface.class);
+        given(converter.convert(any(ConverterInterface.DataPortionInterface.class))).willReturn(100L);
+        conversionManagement.setCores(2);
+        conversionManagement.setConverter(converter);
+        conversionManagement.setConversionReceiver(receiver);
+        portions.forEach(conversionManagement::addDataPortion);
 
+        Thread.sleep(1000L);
+
+        System.out.println(receiver.results);
     }
-
-    private IntConsumer populate(ConversionManagement conversionManagement) {
-        return id -> conversionManagement.addDataPortion(new DataPortionImpl(id, new int[]{0, 0, 0}, ConverterInterface.Channel.LEFT_CHANNEL));
-    }
-
 }
