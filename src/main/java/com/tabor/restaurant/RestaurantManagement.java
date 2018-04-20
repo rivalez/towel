@@ -1,14 +1,13 @@
 package com.tabor.restaurant;
 
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RestaurantManagement implements RestaurantManagementInterface {
-    private ReceiverInterface receiver;
-    private OrderInterface order = new OrderInterfaceImpl();
-    private Storage storage = new StorageImpl();
-
     private Kitchen kitchen;
+    private Stuff<Waiter> waiters = new WaitersStorage();
 
     class Kitchen {
         private KitchenInterface kitchen;
@@ -26,21 +25,89 @@ public class RestaurantManagement implements RestaurantManagementInterface {
         }
     }
 
+    interface Stuff<T> {
+        void add(T value);
+        void remove(int id);
+        List<T> getAll();
+    }
 
+    class WaitersStorage implements Stuff<Waiter> {
+        private List<Waiter> waiters = new ArrayList<>();
+
+        @Override
+        public void add(Waiter waiter) {
+            waiters.add(waiter);
+        }
+
+        @Override
+        public void remove(int id) {
+            waiters.removeIf(waiter -> waiter.getId() == id);
+        }
+
+        @Override
+        public List<Waiter> getAll() {
+            return waiters;
+        }
+    }
+
+    interface OrderManagement {
+        Order generateNewOrder();
+        Order getOrderById(int id);
+    }
+
+    class OrderGenerator implements OrderManagement {
+        @Override
+        public Order generateNewOrder() {
+            return null;
+        }
+
+        @Override
+        public Order getOrderById(int id) {
+            return null;
+        }
+    }
+
+    interface Waiter {
+        void newOrder(int orderID, int tableID);
+        int getId();
+    }
+
+    class MyWaiter implements Waiter {
+        private final WaiterInterface waiter;
+        private final OrderInterface order;
+        private final ExecutorService work = Executors.newFixedThreadPool(1);
+
+        MyWaiter(WaiterInterface waiter, OrderInterface order) {
+            this.waiter = waiter;
+            this.order = order;
+        }
+
+        @Override
+        public void newOrder(int orderID, int tableID) {
+            work.execute(() -> order.newOrder();
+        }
+
+        @Override
+        public int getId() {
+            return waiter.getID();
+        }
+    }
 
     @Override
     public void addWaiter(WaiterInterface waiter) {
+        OrderInterface order = new OrderInterfaceImpl();
         waiter.registerOrder(order);
-        storage.put(waiter, new LinkedBlockingDeque<>());
+        waiters.add(new MyWaiter(waiter, order));
     }
 
     @Override
     public void removeWaiter(WaiterInterface waiter) {
+        waiters.remove(waiter.getID());
     }
 
     @Override
     public void setKitchen(KitchenInterface kitchen) {
-        this.receiver = new ReceiverInterfaceImpl();
+        final ReceiverInterfaceImpl receiver = new ReceiverInterfaceImpl();
         kitchen.registerReceiver(receiver);
         this.kitchen = new Kitchen(kitchen, receiver);
     }
@@ -82,35 +149,6 @@ public class RestaurantManagement implements RestaurantManagementInterface {
         @Override
         protected void done() {
             receiver.mealReady(orderId);
-        }
-    }
-
-    interface Storage {
-        void put(WaiterInterface waiter, LinkedBlockingDeque<Order> orders);
-        LinkedBlockingDeque<Order> getOrders(WaiterInterface waiter);
-        void removeOrder(WaiterInterface waiter);
-        void addOrder(WaiterInterface waiter, Order order);
-    }
-
-    class StorageImpl implements Storage {
-        private ConcurrentSkipListMap<WaiterInterface, LinkedBlockingDeque<Order>> waiters = new ConcurrentSkipListMap<>(Comparator.comparing(WaiterInterface::getID));
-
-        public void put(WaiterInterface waiter, LinkedBlockingDeque<Order> orders) {
-            waiters.put(waiter, orders);
-        }
-
-        public LinkedBlockingDeque<Order> getOrders(WaiterInterface waiter) {
-            return waiters.get(waiter);
-        }
-
-        @Override
-        public void removeOrder(WaiterInterface waiter) {
-
-        }
-
-        @Override
-        public void addOrder(WaiterInterface waiter, Order order) {
-
         }
     }
 }
