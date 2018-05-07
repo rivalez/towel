@@ -2,6 +2,7 @@ package com.tabor.restaurant;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -21,7 +22,7 @@ public class RestaurantManagement implements RestaurantManagementInterface {
         }
 
         public void prepare(int orderId) {
-            workers.execute(new Order(() -> kitchen.prepare(orderId), receiver, orderId));
+            workers.execute(new KitchenOrder(() -> kitchen.prepare(orderId), receiver, orderId));
         }
     }
 
@@ -50,19 +51,46 @@ public class RestaurantManagement implements RestaurantManagementInterface {
         }
     }
 
+    class BasicOrder {
+        private AtomicInteger orderId = new AtomicInteger(0);
+        private AtomicInteger tableId = new AtomicInteger(0);
+
+        public BasicOrder() {
+            this.orderId.incrementAndGet();
+            this.tableId.incrementAndGet();
+        }
+
+        public AtomicInteger getOrderId() {
+            return orderId;
+        }
+
+        public AtomicInteger getTableId() {
+            return tableId;
+        }
+    }
+
     interface OrderManagement {
-        Order generateNewOrder();
-        Order getOrderById(int id);
+        BasicOrder generateNewOrder();
+        Optional<BasicOrder> getOrderById(int id);
+        List<BasicOrder> getAllOrders();
     }
 
     class OrderGenerator implements OrderManagement {
+        private List<BasicOrder> orders = new ArrayList<>();
+
         @Override
-        public Order generateNewOrder() {
-            return null;
+        public BasicOrder generateNewOrder() {
+//            orders.stream().
+            return new BasicOrder();
         }
 
         @Override
-        public Order getOrderById(int id) {
+        public Optional<BasicOrder> getOrderById(int id) {
+            return orders.stream().filter((a) -> a.getOrderId().get() == id).findFirst();
+        }
+
+        @Override
+        public List<BasicOrder> getAllOrders() {
             return null;
         }
     }
@@ -84,7 +112,7 @@ public class RestaurantManagement implements RestaurantManagementInterface {
 
         @Override
         public void newOrder(int orderID, int tableID) {
-            work.execute(() -> order.newOrder();
+            work.execute(() -> order.newOrder(orderID, tableID));
         }
 
         @Override
@@ -131,11 +159,11 @@ public class RestaurantManagement implements RestaurantManagementInterface {
 
         }
     }
-    class Order extends FutureTask<Integer> {
+    class KitchenOrder extends FutureTask<Integer> {
         private int orderId;
         private ReceiverInterface receiver;
 
-        Order(Runnable runnable, ReceiverInterface receiver, Integer orderId) {
+        KitchenOrder(Runnable runnable, ReceiverInterface receiver, Integer orderId) {
             super(runnable, orderId);
             this.orderId = orderId;
             this.receiver = receiver;
