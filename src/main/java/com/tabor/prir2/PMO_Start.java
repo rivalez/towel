@@ -100,14 +100,6 @@ public class PMO_Start {
 
 		PMO_SystemOutRedirect.startRedirectionToNull();
 
-        if ( args.length < 1 ) {
-            PMO_SystemOutRedirect.println( "USAGE: java PMO_Start <A|B|C|D|E>");
-            shutdown();
-        } else if ( args[0].length() != 1 ) {
-            PMO_SystemOutRedirect.println( "Jedno uruchomienie - jeden test" );
-            shutdown();
-        }
-
         Map<String, PMO_RunTestTimeout > tests = new HashMap<>();
         tests.put( "A", new PMO_Test_A() );
         tests.put( "B", new PMO_Test_B() );
@@ -122,7 +114,8 @@ public class PMO_Start {
         sleepTracker.setDelay( 333 );
 
         boolean result = true;
-        result &= findTestAndRun( args[0], tests );
+        //todo here we change test
+        result &= findTestAndRun( "A", tests );
 
         result &= PMO_CommonErrorLog.isStateOK();
 

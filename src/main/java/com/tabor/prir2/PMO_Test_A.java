@@ -54,8 +54,7 @@ public class PMO_Test_A implements PMO_RunTestTimeout, PMO_LogSource {
 
     protected void prepareConversionManagement( int maxCores ) {
         try {
-            management = (ConversionManagementInterface)
-                    PMO_GeneralPurposeFabric.fabric("ConversionManagement", "ConversionManagementInterface");
+            management = new ConversionManagement();
             management.setCores(maxCores);
             management.setConversionReceiver(conversionReceiver);
             management.setConverter(dataConverter);

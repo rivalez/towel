@@ -1,7 +1,6 @@
 package com.tabor.prir2;
 
 import java.util.Comparator;
-import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
@@ -10,13 +9,11 @@ public class ConversionManagement implements ConversionManagementInterface {
     private ConversionReceiverInterface receiver;
     private ConverterInterface converter;
 
-    private Computation computation;
-    //todo consider usage of more threads?
-    private ExecutorService computationService = Executors.newSingleThreadExecutor();
+    private Computation computation = new Computation();
+    private ExecutorService computationService;
 
     private PairMatcher pairMatcher = new PairMatcher();
-    //todo consider usage of more threads?
-    private ExecutorService pairMatcherService = Executors.newSingleThreadExecutor();
+    private ExecutorService pairMatcherService = Executors.newSingleThreadScheduledExecutor();
 
     private DataPortionReceiver dataPortionReceiver;
 
@@ -29,7 +26,7 @@ public class ConversionManagement implements ConversionManagementInterface {
         if (computation != null) {
             computation.handleWorkersChange();
         }
-        computation = new Computation(cores);
+        computationService = Executors.newFixedThreadPool(cores);
         if (computation.converter == null) {
             computation.setConverter(converter);
         }
@@ -83,8 +80,8 @@ public class ConversionManagement implements ConversionManagementInterface {
         private ExecutorService workers;
         private ConverterInterface converter;
 
-        Computation(int cores) {
-            this.workers = Executors.newFixedThreadPool(cores);
+        Computation() {
+            this.workers = Executors.newCachedThreadPool();
         }
 
         void setConverter(ConverterInterface converter) {
@@ -93,7 +90,7 @@ public class ConversionManagement implements ConversionManagementInterface {
 
         void handleWorkersChange() {
             try {
-                workers.awaitTermination(100, TimeUnit.MILLISECONDS);
+                workers.awaitTermination(40, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 logger.warning(e.getMessage());
                 workers.shutdown();
@@ -118,7 +115,9 @@ public class ConversionManagement implements ConversionManagementInterface {
      * matching of elements can use multi threads but sending should be single threading
      */
     class PairMatcher {
-        private ConcurrentSkipListSet<ComputeResult> computedElements = new ConcurrentSkipListSet<>(Comparator.comparing(data -> data.getData().id()));
+        private ConcurrentSkipListSet<ComputeResult> computedElements = new ConcurrentSkipListSet<>(
+                Comparator.comparing((ComputeResult data) -> data.getData().id())
+                        .thenComparing((ComputeResult result) -> result.data.channel()));
 
         void tryFindPair(ComputeResult result) {
             findPair(result);
@@ -126,11 +125,18 @@ public class ConversionManagement implements ConversionManagementInterface {
         }
 
         void findPair(ComputeResult newResult) {
-            Optional<ComputeResult> found = computedElements.stream().filter(foundPair(newResult)).findFirst();
-            if (found.isPresent()) {
-                ComputeResult foundValue = found.get();
-                receiver.result(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
-            }
+            computedElements.stream()
+                    .filter(foundPair(newResult))
+                    .findFirst()
+                    .ifPresent((foundValue) -> matchChannel(newResult, foundValue));
+        }
+
+        private void matchChannel(ComputeResult newResult, ComputeResult foundValue) {
+                if (foundValue.data.channel() == ConverterInterface.Channel.LEFT_CHANNEL) {
+                    receiver.result(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
+                } else {
+                    receiver.result(new ConversionResult(newResult.data, foundValue.data, newResult.result, foundValue.result));
+                }
         }
 
         private Predicate<ComputeResult> foundPair(ComputeResult newResult) {

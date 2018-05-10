@@ -5,7 +5,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntPredicate;
 
-public class PMO_AtomicCounter {
+public class
+PMO_AtomicCounter {
 	private AtomicInteger counter = new AtomicInteger(0);
 	private PMO_AtomicCounter maxValue;
 	private IntPredicate okTest;
