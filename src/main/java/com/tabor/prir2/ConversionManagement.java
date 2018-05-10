@@ -2,11 +2,11 @@ package com.tabor.prir2;
 
 import java.util.Comparator;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
 
 public class ConversionManagement implements ConversionManagementInterface {
-    private ConversionReceiverInterface receiver;
     private ConverterInterface converter;
 
     private Computation computation = new Computation();
@@ -16,6 +16,8 @@ public class ConversionManagement implements ConversionManagementInterface {
     private ExecutorService pairMatcherService = Executors.newSingleThreadScheduledExecutor();
 
     private DataPortionReceiver dataPortionReceiver;
+
+    private ConversionResultToSend toSend;
 
     ConversionManagement() {
         this.dataPortionReceiver = new DataPortionReceiver();
@@ -40,7 +42,8 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     @Override
     public void setConversionReceiver(ConversionReceiverInterface receiver) {
-        this.receiver = receiver;
+        this.toSend = new ConversionResultToSend(receiver);
+        new Thread(() -> toSend.send()).start();
     }
 
     @Override
@@ -132,16 +135,49 @@ public class ConversionManagement implements ConversionManagementInterface {
         }
 
         private void matchChannel(ComputeResult newResult, ComputeResult foundValue) {
-                if (foundValue.data.channel() == ConverterInterface.Channel.LEFT_CHANNEL) {
-                    receiver.result(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
-                } else {
-                    receiver.result(new ConversionResult(newResult.data, foundValue.data, newResult.result, foundValue.result));
-                }
+            if (foundValue.data.channel() == ConverterInterface.Channel.LEFT_CHANNEL) {
+                toSend.add(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
+            } else {
+                toSend.add(new ConversionResult(newResult.data, foundValue.data, newResult.result, foundValue.result));
+            }
         }
 
         private Predicate<ComputeResult> foundPair(ComputeResult newResult) {
             return computeResult -> newResult.id() == computeResult.id();
         }
+    }
+
+    class ConversionResultToSend {
+        private PriorityBlockingQueue<ConversionResult> computedElements =
+                new PriorityBlockingQueue<>(20,
+                        Comparator.comparing((ConversionResult result) -> result.leftChannelData.id()));
+        private AtomicInteger nextIdToSend = new AtomicInteger(1);
+        private ConversionReceiverInterface receiver;
+
+        ConversionResultToSend(ConversionReceiverInterface receiver) {
+            this.receiver = receiver;
+        }
+
+        void add(ConversionResult conversionResult) {
+            this.computedElements.add(conversionResult);
+        }
+
+        void send() {
+            while (true) {
+                if(computedElements.peek() != null){
+                    if (nextIdToSend.get() == computedElements.peek().leftChannelData.id()) {
+                        try {
+                            receiver.result(computedElements.take());
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        nextIdToSend.incrementAndGet();
+                    }
+                }
+            }
+        }
+
+
     }
 
     class ComputeResult {
