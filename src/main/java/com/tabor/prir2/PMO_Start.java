@@ -115,7 +115,7 @@ public class PMO_Start {
 
         boolean result = true;
         //todo here we change test
-        result &= findTestAndRun( "C", tests );
+        result &= findTestAndRun( "E", tests );
 
         result &= PMO_CommonErrorLog.isStateOK();
 

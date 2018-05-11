@@ -1,6 +1,7 @@
 package com.tabor.prir2;
 
 import java.util.Comparator;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
@@ -17,7 +18,7 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     private DataPortionReceiver dataPortionReceiver;
 
-    private ConversionResultToSend toSend;
+    private ConversionResultToSend sender;
 
     ConversionManagement() {
         this.dataPortionReceiver = new DataPortionReceiver();
@@ -42,8 +43,8 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     @Override
     public void setConversionReceiver(ConversionReceiverInterface receiver) {
-        this.toSend = new ConversionResultToSend(receiver);
-        new Thread(() -> toSend.send()).start();
+        this.sender = new ConversionResultToSend(receiver);
+        new Thread(() -> sender.send()).start();
     }
 
     @Override
@@ -52,7 +53,7 @@ public class ConversionManagement implements ConversionManagementInterface {
         computationService.execute(() -> computation.compute(dataPortionReceiver.take()));
     }
 
-    class DataPortionReceiver {
+    private class DataPortionReceiver {
         private final PriorityBlockingQueue<ConverterInterface.DataPortionInterface> portions =
                 new PriorityBlockingQueue<>(20,
                         getDataPortionInterfaceComparator());
@@ -62,11 +63,11 @@ public class ConversionManagement implements ConversionManagementInterface {
                     .thenComparing(ConverterInterface.DataPortionInterface::channel);
         }
 
-        void addDataPortion(ConverterInterface.DataPortionInterface data) {
+        private void addDataPortion(ConverterInterface.DataPortionInterface data) {
             portions.put(data);
         }
 
-        ConverterInterface.DataPortionInterface take() {
+        private ConverterInterface.DataPortionInterface take() {
             try {
                 return portions.take();
             } catch (InterruptedException e) {
@@ -78,20 +79,20 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     }
 
-    class Computation {
+    private class Computation {
         private final Logger logger = Logger.getLogger(Computation.class.getName());
         private ExecutorService workers;
         private ConverterInterface converter;
 
-        Computation() {
+        private Computation() {
             this.workers = Executors.newCachedThreadPool();
         }
 
-        void setConverter(ConverterInterface converter) {
+        private void setConverter(ConverterInterface converter) {
             this.converter = converter;
         }
 
-        void handleWorkersChange() {
+        private void handleWorkersChange() {
             try {
                 workers.awaitTermination(40, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
@@ -100,7 +101,7 @@ public class ConversionManagement implements ConversionManagementInterface {
             }
         }
 
-        long compute(ConverterInterface.DataPortionInterface data) {
+        private long compute(ConverterInterface.DataPortionInterface data) {
             Future<Long> result = workers.submit(() -> converter.convert(data));
             try {
                 long comResult = result.get();
@@ -117,17 +118,17 @@ public class ConversionManagement implements ConversionManagementInterface {
     /**
      * matching of elements can use multi threads but sending should be single threading
      */
-    class PairMatcher {
+    private class PairMatcher {
         private ConcurrentSkipListSet<ComputeResult> computedElements = new ConcurrentSkipListSet<>(
-                Comparator.comparing((ComputeResult data) -> data.getData().id())
-                        .thenComparing((ComputeResult result) -> result.data.channel()));
+                Comparator.comparing(ComputeResult::id)
+                        .thenComparing(ComputeResult::channel));
 
-        void tryFindPair(ComputeResult result) {
+        private void tryFindPair(ComputeResult result) {
             findPair(result);
             computedElements.add(result);
         }
 
-        void findPair(ComputeResult newResult) {
+        private void findPair(ComputeResult newResult) {
             computedElements.stream()
                     .filter(foundPair(newResult))
                     .findFirst()
@@ -136,9 +137,9 @@ public class ConversionManagement implements ConversionManagementInterface {
 
         private void matchChannel(ComputeResult newResult, ComputeResult foundValue) {
             if (foundValue.data.channel() == ConverterInterface.Channel.LEFT_CHANNEL) {
-                toSend.add(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
+                sender.add(new ConversionResult(foundValue.data, newResult.data, foundValue.result, newResult.result));
             } else {
-                toSend.add(new ConversionResult(newResult.data, foundValue.data, newResult.result, foundValue.result));
+                sender.add(new ConversionResult(newResult.data, foundValue.data, newResult.result, foundValue.result));
             }
         }
 
@@ -147,24 +148,24 @@ public class ConversionManagement implements ConversionManagementInterface {
         }
     }
 
-    class ConversionResultToSend {
+    private class ConversionResultToSend {
         private PriorityBlockingQueue<ConversionResult> computedElements =
                 new PriorityBlockingQueue<>(20,
                         Comparator.comparing((ConversionResult result) -> result.leftChannelData.id()));
         private AtomicInteger nextIdToSend = new AtomicInteger(1);
         private ConversionReceiverInterface receiver;
 
-        ConversionResultToSend(ConversionReceiverInterface receiver) {
+        private ConversionResultToSend(ConversionReceiverInterface receiver) {
             this.receiver = receiver;
         }
 
-        void add(ConversionResult conversionResult) {
+        private void add(ConversionResult conversionResult) {
             this.computedElements.add(conversionResult);
         }
 
-        void send() {
+        private void send() {
             while (true) {
-                if(computedElements.peek() != null){
+                Optional.ofNullable(computedElements.peek()).ifPresent((a) -> {
                     if (nextIdToSend.get() == computedElements.peek().leftChannelData.id()) {
                         try {
                             receiver.result(computedElements.take());
@@ -173,28 +174,27 @@ public class ConversionManagement implements ConversionManagementInterface {
                         }
                         nextIdToSend.incrementAndGet();
                     }
-                }
+                });
             }
         }
-
-
     }
 
-    class ComputeResult {
+    private class ComputeResult {
         private ConverterInterface.DataPortionInterface data;
         private long result;
 
-        ComputeResult(ConverterInterface.DataPortionInterface data, long result) {
+        private ComputeResult(ConverterInterface.DataPortionInterface data, long result) {
             this.data = data;
             this.result = result;
         }
 
-        ConverterInterface.DataPortionInterface getData() {
-            return data;
-        }
-
-        int id() {
+        private int id() {
             return data.id();
         }
+
+        private ConverterInterface.Channel channel() {
+            return data.channel();
+        }
+
     }
 }
