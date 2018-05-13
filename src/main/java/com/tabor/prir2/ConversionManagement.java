@@ -4,6 +4,8 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 import java.util.logging.Logger;
 
@@ -11,7 +13,8 @@ public class ConversionManagement implements ConversionManagementInterface {
     private ConverterInterface converter;
 
     private Computation computation = new Computation();
-    private ExecutorService computationService;
+    private ThreadPoolExecutor computationService = new ThreadPoolExecutor(10, 10, 0, TimeUnit.MICROSECONDS,
+            new LinkedBlockingDeque<>());
 
     private PairMatcher pairMatcher = new PairMatcher();
     private ExecutorService pairMatcherService = Executors.newSingleThreadScheduledExecutor();
@@ -19,6 +22,7 @@ public class ConversionManagement implements ConversionManagementInterface {
     private DataPortionReceiver dataPortionReceiver;
 
     private ConversionResultToSend sender;
+    private Lock lock = new ReentrantLock();
 
     ConversionManagement() {
         this.dataPortionReceiver = new DataPortionReceiver();
@@ -26,13 +30,24 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     @Override
     public void setCores(int cores) {
-        if (computation != null) {
-            computation.handleWorkersChange();
+        lock.lock();
+        if (cores > 0 && cores != computationService.getMaximumPoolSize()) {
+            if (cores < computationService.getMaximumPoolSize()) {
+                computationService.setCorePoolSize(cores);
+                computationService.setMaximumPoolSize(cores);
+                this.computation.setCorePoolFirst(cores);
+
+            } else {
+                computationService.setMaximumPoolSize(cores);
+                computationService.setCorePoolSize(cores);
+                this.computation.setMaxPoolFirst(cores);
+            }
         }
-        computationService = Executors.newFixedThreadPool(cores);
+
         if (computation.converter == null) {
             computation.setConverter(converter);
         }
+        lock.unlock();
     }
 
     @Override
@@ -81,24 +96,21 @@ public class ConversionManagement implements ConversionManagementInterface {
 
     private class Computation {
         private final Logger logger = Logger.getLogger(Computation.class.getName());
-        private ExecutorService workers;
+        private ThreadPoolExecutor workers = new ThreadPoolExecutor(10, 10, 0, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<>());
         private ConverterInterface converter;
-
-        private Computation() {
-            this.workers = Executors.newCachedThreadPool();
-        }
 
         private void setConverter(ConverterInterface converter) {
             this.converter = converter;
         }
 
-        private void handleWorkersChange() {
-            try {
-                workers.awaitTermination(40, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                logger.warning(e.getMessage());
-                workers.shutdown();
-            }
+        private void setCorePoolFirst(int cores) {
+            this.workers.setCorePoolSize(cores);
+            this.workers.setMaximumPoolSize(cores);
+        }
+
+        private void setMaxPoolFirst(int cores) {
+            this.workers.setMaximumPoolSize(cores);
+            this.workers.setCorePoolSize(cores);
         }
 
         private long compute(ConverterInterface.DataPortionInterface data) {
@@ -195,6 +207,5 @@ public class ConversionManagement implements ConversionManagementInterface {
         private ConverterInterface.Channel channel() {
             return data.channel();
         }
-
     }
 }
