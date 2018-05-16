@@ -30,8 +30,7 @@ public class PMO_Test implements PMO_RunTestTimeout, PMO_LogSource {
 
     public PMO_Test() {
         managementInterface =
-                (RestaurantManagementInterface)PMO_GeneralPurposeFabric.fabric("RestaurantManagement",
-                        "RestaurantManagementInterface");
+                new RestaurantManagement();
         mealsBuffer = kitchen.getMealsBuffer();
 
         parallelConfirmationBarrier = new CyclicBarrier( PMO_Test_Consts.SIMULTANEOUS_CONFIRM,

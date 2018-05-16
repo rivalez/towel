@@ -31,7 +31,7 @@ public class PMO_CommonErrorLog {
 	private static boolean criticalMistake = false;
 	private static Queue<String> errorLog = new LinkedList<>();
 	private static int errorsCounter;
-	private static final int MAX_ERRORS = 50;
+	private static final int MAX_ERRORS = 500;
 	private static boolean lastErrorMessageAdded;
 
 	synchronized public static boolean isStateOK() {
