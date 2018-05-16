@@ -1,6 +1,7 @@
 package com.tabor.restaurant;
 
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class RestaurantManagement implements RestaurantManagementInterface {
@@ -37,14 +38,12 @@ public class RestaurantManagement implements RestaurantManagementInterface {
             this.waiters = waiters;
         }
 
-        void go(int orderID, int tableId) {
-            //todo how to determine which is free and get him
-            waiters.getAll().get(0).go(orderID, tableId);
+        void go(int orderID, int tableID) {
+            waiters.getAll().stream().filter(Waiter::isReady).findAny().ifPresent((Waiter waiter) -> waiter.go(orderID, tableID));
         }
 
         void newOrder(int orderID, int tableID) {
-            //todo how to determine which is free and get him
-            waiters.getAll().get(0).newOrder(orderID, tableID);
+            waiters.getAll().stream().filter(Waiter::isReady).findAny().ifPresent((Waiter waiter) -> waiter.newOrder(orderID, tableID));
         }
     }
 
@@ -65,6 +64,7 @@ public class RestaurantManagement implements RestaurantManagementInterface {
     }
 
     class Kitchen {
+        private Semaphore block;
         private KitchenInterface kitchen;
         private ReceiverInterface receiver;
         private ExecutorService workers;
@@ -73,10 +73,17 @@ public class RestaurantManagement implements RestaurantManagementInterface {
             this.kitchen = kitchenInterface;
             this.receiver = receiver;
             this.workers = Executors.newFixedThreadPool(kitchen.getNumberOfParallelTasks());
+            this.block = new Semaphore(kitchen.getNumberOfParallelTasks());
         }
 
         void prepare(int orderId) {
+            try {
+                block.acquire();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             workers.execute(new KitchenOrder(() -> kitchen.prepare(orderId), receiver, orderId));
+            block.release();
         }
     }
 
@@ -84,12 +91,14 @@ public class RestaurantManagement implements RestaurantManagementInterface {
         void newOrder(int orderID, int tableID);
         void go(int orderID, int tableID);
         int getId();
+        boolean isReady();
     }
 
     class MyWaiter implements Waiter {
         private final WaiterInterface waiter;
         private final OrderInterface order;
         private final ExecutorService work = Executors.newFixedThreadPool(1);
+        private AtomicBoolean ready = new AtomicBoolean(true);
 
         MyWaiter(WaiterInterface waiter, OrderInterface order) {
             this.waiter = waiter;
@@ -98,17 +107,30 @@ public class RestaurantManagement implements RestaurantManagementInterface {
 
         @Override
         public void newOrder(int orderID, int tableID) {
+            changeReadyState();
             work.execute(() -> order.newOrder(orderID, tableID));
+            changeReadyState();
         }
 
         @Override
         public void go(int orderID, int tableID) {
+            changeReadyState();
             work.execute(() -> waiter.go(orderID, tableID));
+            changeReadyState();
         }
 
         @Override
         public int getId() {
             return waiter.getID();
+        }
+
+        @Override
+        public boolean isReady() {
+            return ready.get();
+        }
+
+        private void changeReadyState() {
+            this.ready.compareAndSet(ready.get(), !ready.get());
         }
     }
 
